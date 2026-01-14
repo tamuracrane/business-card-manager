@@ -6,7 +6,7 @@
     <title>名刺管理アプリ (OCR強化版)</title>
     
     <!-- Tesseract.js for OCR -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.0.0/dist/tesseract.min.js"></script>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -539,6 +539,15 @@
             font-size: 12px;
             margin-left: 10px;
         }
+
+        .debug-info {
+            margin-top: 10px;
+            padding: 10px;
+            background: #fff3cd;
+            border-radius: 5px;
+            font-size: 12px;
+            color: #856404;
+        }
     </style>
 </head>
 <body>
@@ -550,7 +559,7 @@
             🔐 Googleでログイン
         </button>
         <p style="margin-top: 20px; font-size: 14px; color: #999;">
-            ✨ 名前・会社・電話・メールを自動入力
+            ✨ 氏名・会社・電話・メールを自動入力
         </p>
     </div>
 
@@ -584,7 +593,7 @@
         <input type="text" 
                id="searchInput" 
                class="search-box" 
-               placeholder="🔍 名前、会社名、電話番号、メールアドレス、メモなどで検索...">
+               placeholder="🔍 氏名、会社名、電話番号、メールアドレス、メモなどで検索...">
         
         <div class="btn-group">
             <button class="btn btn-primary" onclick="openModal()">➕ 新規名刺追加</button>
@@ -610,7 +619,7 @@
             
             <div class="image-upload-area" onclick="document.getElementById('imageInput').click()">
                 <p>📷 クリックして名刺画像をアップロード</p>
-                <p style="font-size: 14px; color: #999;">自動で圧縮＆高精度OCRを実行します</p>
+                <p style="font-size: 14px; color: #999;">自動で圧縮&高精度OCRを実行します</p>
                 <input type="file" 
                        id="imageInput" 
                        accept="image/*" 
@@ -633,6 +642,7 @@
                     <div class="progress-fill" id="progressFill" style="width: 0%"></div>
                 </div>
                 <div class="extraction-status" id="extractionStatus"></div>
+                <div id="debugInfo" class="debug-info" style="display: none;"></div>
             </div>
 
             <div id="ocrResult" class="ocr-result" style="display: none;">
@@ -644,7 +654,7 @@
                 <input type="hidden" id="cardId">
                 
                 <div class="form-group">
-                    <label for="name">名前 *</label>
+                    <label for="name">氏名 *</label>
                     <input type="text" id="name" required placeholder="山田 太郎">
                 </div>
 
@@ -691,7 +701,7 @@
 
     <script>
         // ========================================
-        // Firebase設定（ここに自分の設定を入れる）
+        // Firebase設定(ここに自分の設定を入れる)
         // ========================================
         const firebaseConfig = {
             apiKey: "AIzaSyBrnz0pOgHv7bCAhaVmM9kovRBMQI54yLU",
@@ -751,6 +761,9 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 アプリ起動');
+            console.log('Tesseract.js loaded:', typeof Tesseract !== 'undefined');
+            
             initializeFirebase();
             
             let searchTimeout;
@@ -853,7 +866,7 @@
         }
 
         async function logout() {
-            if (confirm('ログアウトしますか？')) {
+            if (confirm('ログアウトしますか?')) {
                 try {
                     if (unsubscribe) {
                         unsubscribe();
@@ -929,6 +942,8 @@
             document.getElementById('imagePreview').style.display = 'none';
             document.getElementById('imageInfo').textContent = '';
             document.getElementById('ocrResult').style.display = 'none';
+            document.getElementById('ocrProgress').style.display = 'none';
+            document.getElementById('debugInfo').style.display = 'none';
             
             if (cardId) {
                 currentEditId = cardId;
@@ -963,7 +978,7 @@
         }
 
         // ========================================
-        // 画像アップロード & OCR（強化版）
+        // 画像アップロード & OCR(強化版)
         // ========================================
 
         let uploadedImageBlob = null;
@@ -972,6 +987,8 @@
         async function handleImageUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
+
+            console.log('📸 画像アップロード開始:', file.name, formatFileSize(file.size));
 
             const compressionProgress = document.getElementById('compressionProgress');
             const compressionFill = document.getElementById('compressionFill');
@@ -1003,14 +1020,17 @@
                 imagePreview.src = dataUrl;
                 imagePreview.style.display = 'block';
 
+                console.log('✅ 画像圧縮完了');
+
                 setTimeout(() => {
                     compressionProgress.style.display = 'none';
                 }, 1000);
 
-                // OCR処理開始（強化版）
+                // OCR処理開始(強化版)
+                console.log('🔍 OCR処理を開始します...');
                 await performEnhancedOCR(dataUrl);
             } catch (error) {
-                console.error('Compression error:', error);
+                console.error('❌ 圧縮エラー:', error);
                 compressionProgress.style.display = 'none';
                 imageInfo.innerHTML = '<span style="color: #ff4757;">⚠️ 圧縮エラー</span>';
                 alert('画像の圧縮に失敗しました: ' + error.message);
@@ -1027,33 +1047,77 @@
             const extractionStatus = document.getElementById('extractionStatus');
             const ocrResult = document.getElementById('ocrResult');
             const ocrText = document.getElementById('ocrText');
+            const debugInfo = document.getElementById('debugInfo');
             
             progressDiv.style.display = 'block';
             extractionStatus.innerHTML = '';
+            debugInfo.style.display = 'block';
+            debugInfo.textContent = '🔄 OCRエンジンを初期化中...';
 
             try {
-                ocrStatus.textContent = '🔍 OCRエンジンを起動中...';
+                // Tesseract.jsが利用可能かチェック
+                if (typeof Tesseract === 'undefined') {
+                    throw new Error('Tesseract.jsが読み込まれていません');
+                }
+
+                console.log('✅ Tesseract.js利用可能');
+                debugInfo.textContent = '✅ Tesseract.js利用可能 - 日本語モデルをダウンロード中...';
                 
-                const worker = await Tesseract.createWorker('jpn', 1, {
+                ocrStatus.textContent = '🔍 OCRエンジンを起動中...';
+                progressFill.style.width = '10%';
+
+                // Workerを作成（日本語+英語）
+                const worker = await Tesseract.createWorker('jpn+eng', 1, {
                     logger: m => {
+                        console.log('OCR進捗:', m);
                         if (m.status === 'recognizing text') {
                             const progress = Math.round(m.progress * 100);
-                            progressFill.style.width = progress + '%';
+                            progressFill.style.width = (10 + progress * 0.8) + '%';
                             ocrStatus.textContent = `🔍 テキストを認識中... ${progress}%`;
+                            debugInfo.textContent = `認識進捗: ${progress}% - ${m.progress.toFixed(2)}`;
+                        } else if (m.status === 'loading tesseract core') {
+                            debugInfo.textContent = '📦 Tesseractコアをロード中...';
+                        } else if (m.status === 'initializing tesseract') {
+                            debugInfo.textContent = '🔧 OCRエンジンを初期化中...';
+                        } else if (m.status === 'loading language traineddata') {
+                            debugInfo.textContent = '📚 日本語学習データをロード中...';
+                        } else if (m.status === 'initializing api') {
+                            debugInfo.textContent = '⚙️ APIを初期化中...';
                         }
                     }
                 });
 
-                ocrStatus.textContent = '🔍 画像を解析中...';
-                const { data: { text } } = await worker.recognize(imageSrc);
-                await worker.terminate();
-
-                console.log('=== OCR完全結果 ===');
-                console.log(text);
+                console.log('✅ Worker作成完了');
+                debugInfo.textContent = '✅ OCRエンジン準備完了 - 画像を解析中...';
                 
+                ocrStatus.textContent = '🔍 画像を解析中...';
+                progressFill.style.width = '90%';
+
+                // OCR実行
+                const { data: { text, confidence } } = await worker.recognize(imageSrc);
+                
+                console.log('=== OCR完全結果 ===');
+                console.log('テキスト:', text);
+                console.log('信頼度:', confidence);
+                
+                progressFill.style.width = '100%';
+                debugInfo.textContent = `✅ OCR完了 - 信頼度: ${confidence ? confidence.toFixed(2) + '%' : '不明'}`;
+
+                await worker.terminate();
+                console.log('✅ Worker終了');
+
                 // OCR結果を表示
                 ocrResult.style.display = 'block';
-                ocrText.textContent = text;
+                ocrText.textContent = text || '(テキストが検出されませんでした)';
+
+                if (!text || text.trim().length === 0) {
+                    ocrStatus.textContent = '⚠️ テキストが検出されませんでした';
+                    debugInfo.textContent = '⚠️ 画像からテキストを抽出できませんでした。画像の品質を確認してください。';
+                    setTimeout(() => {
+                        progressDiv.style.display = 'none';
+                    }, 3000);
+                    return;
+                }
 
                 ocrStatus.textContent = '✨ 情報を抽出中...';
                 
@@ -1062,7 +1126,7 @@
                 
                 // 抽出状況を表示
                 const statuses = [
-                    { label: '名前', found: extracted.name !== '' },
+                    { label: '氏名', found: extracted.name !== '' },
                     { label: '会社名', found: extracted.company !== '' },
                     { label: '役職', found: extracted.position !== '' },
                     { label: 'メール', found: extracted.email !== '' },
@@ -1076,18 +1140,25 @@
                     </div>
                 `).join('');
                 
-                ocrStatus.textContent = '✅ OCR完了！';
+                const foundCount = statuses.filter(s => s.found).length;
+                ocrStatus.textContent = `✅ OCR完了! (${foundCount}/6項目を検出)`;
+                debugInfo.textContent = `✅ 抽出完了: ${foundCount}個の項目を自動入力しました`;
                 
                 setTimeout(() => {
                     progressDiv.style.display = 'none';
-                }, 2000);
+                }, 3000);
                 
                 showSyncStatus('OCR完了', 'success');
             } catch (error) {
-                console.error('OCR Error:', error);
-                progressDiv.style.display = 'none';
+                console.error('❌ OCR Error:', error);
+                progressDiv.style.display = 'block';
                 ocrStatus.textContent = '⚠️ OCR失敗';
+                debugInfo.style.display = 'block';
+                debugInfo.textContent = `❌ エラー: ${error.message}`;
                 showSyncStatus('OCR失敗', 'error');
+                
+                // エラーの詳細をアラート表示
+                alert('OCR処理に失敗しました:\n' + error.message + '\n\n画像の品質を確認するか、手動で入力してください。');
             }
         }
 
@@ -1113,43 +1184,40 @@
             console.log('行数:', lines.length);
             console.log('全行:', lines);
 
-            // 1. メールアドレス抽出（優先度：高）
+            // 1. メールアドレス抽出(優先度:高)
             const emailPatterns = [
-                /([a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
-                /([a-zA-Z0-9._+-]+[@＠][a-zA-Z0-9.-]+[.．][a-zA-Z]{2,})/g
+                /([a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi,
+                /([a-zA-Z0-9._+-]+[@]+ *[a-zA-Z0-9.-]+[.] *[a-zA-Z]{2,})/gi
             ];
             
             for (const pattern of emailPatterns) {
                 const emails = cleanText.match(pattern);
                 if (emails && emails.length > 0) {
-                    result.email = emails[0].replace(/[@＠]/, '@').replace(/[.．]/, '.');
+                    result.email = emails[0].toLowerCase().replace(/\s+/g, '');
                     console.log('✅ メール検出:', result.email);
                     break;
                 }
             }
 
-            // 2. 電話番号抽出（優先度：高）
+            // 2. 電話番号抽出(優先度:高)
             const phonePatterns = [
                 /(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{3,4})/g,
                 /(\d{10,11})/g,
-                /([0０][0-9０-９]{1,4}[-−ー\s()（）]*[0-9０-９]{2,4}[-−ー\s]*[0-9０-９]{3,4})/g
+                /([0-9]{2,4}[-−ー\s()()]*[0-9]{2,4}[-−ー\s]*[0-9]{3,4})/g
             ];
             
             for (const pattern of phonePatterns) {
                 const phones = cleanText.match(pattern);
                 if (phones && phones.length > 0) {
-                    // 全角を半角に変換
-                    result.phone = phones[0]
-                        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
-                        .replace(/[−ー]/g, '-');
+                    result.phone = phones[0].replace(/[−ー]/g, '-').replace(/\s+/g, '');
                     console.log('✅ 電話番号検出:', result.phone);
                     break;
                 }
             }
 
-            // 3. 会社名抽出（優先度：中）
+            // 3. 会社名抽出(優先度:中)
             const companyKeywords = ['株式会社', '有限会社', '合同会社', '合資会社', '財団法人', '社団法人', 
-                                    '一般社団法人', '公益社団法人', 'Corporation', 'Inc', 'Ltd', 'Co'];
+                                    '一般社団法人', '公益社団法人', 'Corporation', 'Inc', 'Ltd', 'Co', 'LLC'];
             
             for (const line of lines) {
                 for (const keyword of companyKeywords) {
@@ -1162,14 +1230,14 @@
                 if (result.company) break;
             }
 
-            // 4. 役職抽出（優先度：中）
+            // 4. 役職抽出(優先度:中)
             const positionKeywords = ['社長', '代表取締役', '取締役', '部長', '課長', '係長', '主任', 
                                      'マネージャー', 'ディレクター', 'リーダー', '担当', '責任者',
-                                     'CEO', 'COO', 'CTO', 'CFO', 'Manager', 'Director'];
+                                     'CEO', 'COO', 'CTO', 'CFO', 'Manager', 'Director', 'Chief'];
             
             for (const line of lines) {
                 for (const keyword of positionKeywords) {
-                    if (line.includes(keyword) && line.length < 30) {
+                    if (line.toLowerCase().includes(keyword.toLowerCase()) && line.length < 30) {
                         result.position = line;
                         console.log('✅ 役職検出:', result.position);
                         break;
@@ -1178,7 +1246,7 @@
                 if (result.position) break;
             }
 
-            // 5. 住所抽出（優先度：低）
+            // 5. 住所抽出(優先度:低)
             const addressKeywords = ['東京都', '大阪府', '京都府', '北海道', '県', '市', '区', '町', '村'];
             
             for (const line of lines) {
@@ -1192,20 +1260,20 @@
                 if (result.address) break;
             }
 
-            // 6. 名前抽出（優先度：高、但し最後に実行）
-            // 最初の行から名前を推測（会社名や役職でない場合）
+            // 6. 氏名抽出(優先度:高、但し最後に実行)
+            // 最初の行から氏名を推測(会社名や役職でない場合)
             if (lines.length > 0) {
                 const firstLine = lines[0];
                 // 2-10文字で、会社キーワードや役職キーワードを含まない
                 if (firstLine.length >= 2 && firstLine.length <= 10) {
                     const isCompany = companyKeywords.some(kw => firstLine.includes(kw));
-                    const isPosition = positionKeywords.some(kw => firstLine.includes(kw));
+                    const isPosition = positionKeywords.some(kw => firstLine.toLowerCase().includes(kw.toLowerCase()));
                     const hasEmail = /@/.test(firstLine);
                     const hasPhone = /\d{3,}/.test(firstLine);
                     
                     if (!isCompany && !isPosition && !hasEmail && !hasPhone) {
                         result.name = firstLine;
-                        console.log('✅ 名前検出（推測）:', result.name);
+                        console.log('✅ 氏名検出(推測):', result.name);
                     }
                 }
             }
@@ -1213,26 +1281,33 @@
             // フォームに自動入力
             if (result.name && !document.getElementById('name').value) {
                 document.getElementById('name').value = result.name;
+                console.log('📝 氏名を自動入力');
             }
             if (result.company && !document.getElementById('company').value) {
                 document.getElementById('company').value = result.company;
+                console.log('📝 会社名を自動入力');
             }
             if (result.position && !document.getElementById('position').value) {
                 document.getElementById('position').value = result.position;
+                console.log('📝 役職を自動入力');
             }
             if (result.email && !document.getElementById('email').value) {
                 document.getElementById('email').value = result.email;
+                console.log('📝 メールを自動入力');
             }
             if (result.phone && !document.getElementById('phone').value) {
                 document.getElementById('phone').value = result.phone;
+                console.log('📝 電話番号を自動入力');
             }
             if (result.address && !document.getElementById('address').value) {
                 document.getElementById('address').value = result.address;
+                console.log('📝 住所を自動入力');
             }
 
-            // メモ欄にOCR全文を追加
+            // メモ欄にOCR全文を追加（既存のメモがない場合のみ）
             if (!document.getElementById('memo').value) {
-                document.getElementById('memo').value = text;
+                document.getElementById('memo').value = '--- OCR読取結果 ---\n' + text;
+                console.log('📝 メモ欄にOCR結果を追加');
             }
 
             console.log('=== 最終抽出結果 ===', result);
@@ -1304,7 +1379,7 @@
         }
 
         // ========================================
-        // 名刺表示（ページネーション付き）
+        // 名刺表示(ページネーション付き)
         // ========================================
 
         function filterAndDisplayCards(searchTerm = '') {
@@ -1403,7 +1478,7 @@
         // ========================================
 
         async function deleteCard(cardId) {
-            if (confirm('この名刺を削除してもよろしいですか？')) {
+            if (confirm('この名刺を削除してもよろしいですか?')) {
                 showSyncStatus('削除中...', 'syncing');
                 try {
                     const card = businessCards.find(c => c.id === cardId);
