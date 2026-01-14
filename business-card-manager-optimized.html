@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>名刺管理アプリ (最適化版)</title>
+    <title>名刺管理アプリ (OCR強化版)</title>
     
     <!-- Tesseract.js for OCR -->
     <script src="https://cdn.jsdelivr.net/npm/tesseract.js@4/dist/tesseract.min.js"></script>
@@ -381,10 +381,19 @@
         #ocrProgress, #compressionProgress {
             display: none;
             margin-top: 15px;
-            padding: 10px;
+            padding: 15px;
             background: #f0f0f0;
             border-radius: 8px;
-            text-align: center;
+        }
+
+        #ocrProgress {
+            background: #e3f2fd;
+        }
+
+        .progress-status {
+            margin-bottom: 10px;
+            color: #333;
+            font-weight: bold;
         }
 
         .progress-bar {
@@ -400,6 +409,53 @@
             height: 100%;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             transition: width 0.3s;
+        }
+
+        .ocr-result {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .ocr-result h4 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .ocr-result pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            font-size: 12px;
+            color: #666;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .extraction-status {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .extraction-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 5px 10px;
+            background: white;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .extraction-item.found {
+            color: #4CAF50;
+        }
+
+        .extraction-item.not-found {
+            color: #999;
         }
 
         .sync-status {
@@ -489,18 +545,18 @@
     <!-- ログイン画面 -->
     <div id="loginContainer" class="login-container">
         <h2>📇 名刺管理アプリ</h2>
-        <p>大量の名刺も快適に管理できる最適化版です。<br>Googleアカウントでログインしてください。</p>
+        <p>OCR強化版 - 名刺情報を高精度で自動抽出<br>Googleアカウントでログインしてください。</p>
         <button class="btn btn-primary" onclick="loginWithGoogle()">
             🔐 Googleでログイン
         </button>
         <p style="margin-top: 20px; font-size: 14px; color: #999;">
-            ✨ 自動画像圧縮で10,000枚以上も高速表示
+            ✨ 名前・会社・電話・メールを自動入力
         </p>
     </div>
 
     <!-- メインアプリ画面 -->
     <div id="appContainer" class="container hidden">
-        <h1>📇 名刺管理アプリ <span class="quality-badge">最適化版</span></h1>
+        <h1>📇 名刺管理アプリ <span class="quality-badge">OCR強化版</span></h1>
         
         <div class="user-info">
             <div class="user-details">
@@ -554,7 +610,7 @@
             
             <div class="image-upload-area" onclick="document.getElementById('imageInput').click()">
                 <p>📷 クリックして名刺画像をアップロード</p>
-                <p style="font-size: 14px; color: #999;">自動で圧縮してOCRを実行します</p>
+                <p style="font-size: 14px; color: #999;">自動で圧縮＆高精度OCRを実行します</p>
                 <input type="file" 
                        id="imageInput" 
                        accept="image/*" 
@@ -565,17 +621,23 @@
             </div>
 
             <div id="compressionProgress">
-                <p>画像を圧縮中...</p>
+                <div class="progress-status">📦 画像を圧縮中...</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="compressionFill" style="width: 0%"></div>
                 </div>
             </div>
 
             <div id="ocrProgress">
-                <p>OCR処理中...</p>
+                <div class="progress-status" id="ocrStatus">🔍 OCR処理中...</div>
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill" style="width: 0%"></div>
                 </div>
+                <div class="extraction-status" id="extractionStatus"></div>
+            </div>
+
+            <div id="ocrResult" class="ocr-result" style="display: none;">
+                <h4>📄 OCR読み取り結果</h4>
+                <pre id="ocrText"></pre>
             </div>
 
             <form id="cardForm" onsubmit="saveCard(event)">
@@ -583,32 +645,32 @@
                 
                 <div class="form-group">
                     <label for="name">名前 *</label>
-                    <input type="text" id="name" required>
+                    <input type="text" id="name" required placeholder="山田 太郎">
                 </div>
 
                 <div class="form-group">
                     <label for="company">会社名</label>
-                    <input type="text" id="company">
+                    <input type="text" id="company" placeholder="株式会社サンプル">
                 </div>
 
                 <div class="form-group">
                     <label for="position">役職</label>
-                    <input type="text" id="position">
+                    <input type="text" id="position" placeholder="営業部長">
                 </div>
 
                 <div class="form-group">
                     <label for="email">メールアドレス</label>
-                    <input type="email" id="email">
+                    <input type="email" id="email" placeholder="yamada@example.com">
                 </div>
 
                 <div class="form-group">
                     <label for="phone">電話番号</label>
-                    <input type="tel" id="phone">
+                    <input type="tel" id="phone" placeholder="03-1234-5678">
                 </div>
 
                 <div class="form-group">
                     <label for="address">住所</label>
-                    <input type="text" id="address">
+                    <input type="text" id="address" placeholder="東京都渋谷区...">
                 </div>
 
                 <div class="form-group">
@@ -638,7 +700,7 @@
             storageBucket: "meishi-kanri-d6920.firebasestorage.app",
             messagingSenderId: "702234993651",
             appId: "1:702234993651:web:2332fb8f6905ed81892886",
-            measurementId: "G-0HK7C4GGZP",
+            measurementId: "G-0HK7C4GGZP"
         };
 
         // Firebase初期化
@@ -655,8 +717,8 @@
         let filteredCards = [];
 
         // 画像圧縮設定
-        const MAX_IMAGE_SIZE = 50 * 1024; // 50KB
-        const THUMBNAIL_MAX_SIZE = 10 * 1024; // 10KB（サムネイル用）
+        const MAX_IMAGE_SIZE = 50 * 1024;
+        const THUMBNAIL_MAX_SIZE = 10 * 1024;
         const MAX_WIDTH = 800;
         const MAX_HEIGHT = 800;
         const THUMBNAIL_WIDTH = 300;
@@ -672,7 +734,6 @@
                 
                 console.log('Firebase initialized successfully');
                 
-                // 認証状態の監視
                 auth.onAuthStateChanged(user => {
                     if (user) {
                         currentUser = user;
@@ -689,11 +750,9 @@
             }
         }
 
-        // ページ読み込み時
         document.addEventListener('DOMContentLoaded', function() {
             initializeFirebase();
             
-            // 検索機能（デバウンス付き）
             let searchTimeout;
             document.getElementById('searchInput').addEventListener('input', function(e) {
                 clearTimeout(searchTimeout);
@@ -708,9 +767,6 @@
         // 画像圧縮関連
         // ========================================
 
-        /**
-         * 画像を圧縮する
-         */
         async function compressImage(file, maxSize, maxWidth, maxHeight) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -719,12 +775,10 @@
                     const img = new Image();
                     
                     img.onload = function() {
-                        // キャンバスを作成
                         const canvas = document.createElement('canvas');
                         let width = img.width;
                         let height = img.height;
                         
-                        // アスペクト比を保ちながらリサイズ
                         if (width > height) {
                             if (width > maxWidth) {
                                 height *= maxWidth / width;
@@ -743,9 +797,7 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
                         
-                        // 品質を調整しながら圧縮
                         let quality = 0.9;
-                        let blob = null;
                         
                         const tryCompress = () => {
                             canvas.toBlob((b) => {
@@ -770,9 +822,6 @@
             });
         }
 
-        /**
-         * BlobをデータURLに変換
-         */
         function blobToDataURL(blob) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -782,9 +831,6 @@
             });
         }
 
-        /**
-         * ファイルサイズをフォーマット
-         */
         function formatFileSize(bytes) {
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
@@ -830,7 +876,6 @@
             document.getElementById('loginContainer').classList.add('hidden');
             document.getElementById('appContainer').classList.remove('hidden');
             
-            // ユーザー情報表示
             if (currentUser) {
                 document.getElementById('userName').textContent = currentUser.displayName || currentUser.email;
                 document.getElementById('userPhoto').src = currentUser.photoURL || 'https://via.placeholder.com/40';
@@ -844,7 +889,6 @@
         function loadCardsFromFirestore() {
             showSyncStatus('データを同期中...', 'syncing');
             
-            // リアルタイムリスナー
             unsubscribe = db.collection('businessCards')
                 .orderBy('createdAt', 'desc')
                 .onSnapshot(snapshot => {
@@ -858,13 +902,11 @@
                             ...data
                         });
                         
-                        // ストレージ使用量を計算（概算）
                         if (data.thumbnailUrl) {
-                            totalSize += THUMBNAIL_MAX_SIZE / 1024 / 1024; // MB換算
+                            totalSize += THUMBNAIL_MAX_SIZE / 1024 / 1024;
                         }
                     });
                     
-                    // 統計情報を更新
                     document.getElementById('totalCards').textContent = businessCards.length;
                     document.getElementById('storageUsed').textContent = totalSize.toFixed(2) + ' MB';
                     
@@ -886,6 +928,7 @@
             document.getElementById('cardForm').reset();
             document.getElementById('imagePreview').style.display = 'none';
             document.getElementById('imageInfo').textContent = '';
+            document.getElementById('ocrResult').style.display = 'none';
             
             if (cardId) {
                 currentEditId = cardId;
@@ -920,7 +963,7 @@
         }
 
         // ========================================
-        // 画像アップロード & OCR
+        // 画像アップロード & OCR（強化版）
         // ========================================
 
         let uploadedImageBlob = null;
@@ -935,17 +978,14 @@
             const imageInfo = document.getElementById('imageInfo');
             
             try {
-                // 元のファイルサイズ表示
                 const originalSize = formatFileSize(file.size);
                 imageInfo.textContent = `元のサイズ: ${originalSize}`;
                 compressionProgress.style.display = 'block';
                 compressionFill.style.width = '30%';
 
-                // 通常サイズに圧縮
                 uploadedImageBlob = await compressImage(file, MAX_IMAGE_SIZE, MAX_WIDTH, MAX_HEIGHT);
                 compressionFill.style.width = '60%';
 
-                // サムネイルを生成
                 uploadedThumbnailBlob = await compressImage(file, THUMBNAIL_MAX_SIZE, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
                 compressionFill.style.width = '100%';
 
@@ -958,7 +998,6 @@
                     <span style="color: #4CAF50;">✅ 圧縮完了</span>
                 `;
 
-                // プレビュー表示
                 const dataUrl = await blobToDataURL(uploadedImageBlob);
                 const imagePreview = document.getElementById('imagePreview');
                 imagePreview.src = dataUrl;
@@ -968,8 +1007,8 @@
                     compressionProgress.style.display = 'none';
                 }, 1000);
 
-                // OCR処理開始
-                performOCR(dataUrl);
+                // OCR処理開始（強化版）
+                await performEnhancedOCR(dataUrl);
             } catch (error) {
                 console.error('Compression error:', error);
                 compressionProgress.style.display = 'none';
@@ -978,62 +1017,227 @@
             }
         }
 
-        async function performOCR(imageSrc) {
+        /**
+         * 強化版OCR処理
+         */
+        async function performEnhancedOCR(imageSrc) {
             const progressDiv = document.getElementById('ocrProgress');
             const progressFill = document.getElementById('progressFill');
+            const ocrStatus = document.getElementById('ocrStatus');
+            const extractionStatus = document.getElementById('extractionStatus');
+            const ocrResult = document.getElementById('ocrResult');
+            const ocrText = document.getElementById('ocrText');
+            
             progressDiv.style.display = 'block';
+            extractionStatus.innerHTML = '';
 
             try {
+                ocrStatus.textContent = '🔍 OCRエンジンを起動中...';
+                
                 const worker = await Tesseract.createWorker('jpn', 1, {
                     logger: m => {
                         if (m.status === 'recognizing text') {
                             const progress = Math.round(m.progress * 100);
                             progressFill.style.width = progress + '%';
+                            ocrStatus.textContent = `🔍 テキストを認識中... ${progress}%`;
                         }
                     }
                 });
 
+                ocrStatus.textContent = '🔍 画像を解析中...';
                 const { data: { text } } = await worker.recognize(imageSrc);
                 await worker.terminate();
 
-                parseOCRText(text);
+                console.log('=== OCR完全結果 ===');
+                console.log(text);
                 
-                progressDiv.style.display = 'none';
+                // OCR結果を表示
+                ocrResult.style.display = 'block';
+                ocrText.textContent = text;
+
+                ocrStatus.textContent = '✨ 情報を抽出中...';
+                
+                // 強化版パース処理
+                const extracted = parseOCRTextEnhanced(text);
+                
+                // 抽出状況を表示
+                const statuses = [
+                    { label: '名前', found: extracted.name !== '' },
+                    { label: '会社名', found: extracted.company !== '' },
+                    { label: '役職', found: extracted.position !== '' },
+                    { label: 'メール', found: extracted.email !== '' },
+                    { label: '電話', found: extracted.phone !== '' },
+                    { label: '住所', found: extracted.address !== '' }
+                ];
+                
+                extractionStatus.innerHTML = statuses.map(s => `
+                    <div class="extraction-item ${s.found ? 'found' : 'not-found'}">
+                        ${s.found ? '✅' : '⚪'} ${s.label}
+                    </div>
+                `).join('');
+                
+                ocrStatus.textContent = '✅ OCR完了！';
+                
+                setTimeout(() => {
+                    progressDiv.style.display = 'none';
+                }, 2000);
+                
                 showSyncStatus('OCR完了', 'success');
             } catch (error) {
                 console.error('OCR Error:', error);
                 progressDiv.style.display = 'none';
+                ocrStatus.textContent = '⚠️ OCR失敗';
                 showSyncStatus('OCR失敗', 'error');
             }
         }
 
-        function parseOCRText(text) {
-            console.log('OCR結果:', text);
+        /**
+         * 強化版テキスト解析
+         */
+        function parseOCRTextEnhanced(text) {
+            console.log('=== テキスト解析開始 ===');
+            
+            const result = {
+                name: '',
+                company: '',
+                position: '',
+                email: '',
+                phone: '',
+                address: ''
+            };
 
-            // メールアドレス抽出
-            const emailRegex = /[\w\.-]+@[\w\.-]+\.\w+/g;
-            const emails = text.match(emailRegex);
-            if (emails && emails.length > 0 && !document.getElementById('email').value) {
-                document.getElementById('email').value = emails[0];
+            // テキストをクリーンアップ
+            const cleanText = text.replace(/\s+/g, ' ').trim();
+            const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+            
+            console.log('行数:', lines.length);
+            console.log('全行:', lines);
+
+            // 1. メールアドレス抽出（優先度：高）
+            const emailPatterns = [
+                /([a-zA-Z0-9._+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g,
+                /([a-zA-Z0-9._+-]+[@＠][a-zA-Z0-9.-]+[.．][a-zA-Z]{2,})/g
+            ];
+            
+            for (const pattern of emailPatterns) {
+                const emails = cleanText.match(pattern);
+                if (emails && emails.length > 0) {
+                    result.email = emails[0].replace(/[@＠]/, '@').replace(/[.．]/, '.');
+                    console.log('✅ メール検出:', result.email);
+                    break;
+                }
             }
 
-            // 電話番号抽出
-            const phoneRegex = /(\d{2,4}[-\s]?\d{2,4}[-\s]?\d{4}|\d{10,11})/g;
-            const phones = text.match(phoneRegex);
-            if (phones && phones.length > 0 && !document.getElementById('phone').value) {
-                document.getElementById('phone').value = phones[0];
+            // 2. 電話番号抽出（優先度：高）
+            const phonePatterns = [
+                /(\d{2,4}[-−ー]\d{2,4}[-−ー]\d{3,4})/g,
+                /(\d{10,11})/g,
+                /([0０][0-9０-９]{1,4}[-−ー\s()（）]*[0-9０-９]{2,4}[-−ー\s]*[0-9０-９]{3,4})/g
+            ];
+            
+            for (const pattern of phonePatterns) {
+                const phones = cleanText.match(pattern);
+                if (phones && phones.length > 0) {
+                    // 全角を半角に変換
+                    result.phone = phones[0]
+                        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0))
+                        .replace(/[−ー]/g, '-');
+                    console.log('✅ 電話番号検出:', result.phone);
+                    break;
+                }
             }
 
-            // 名前抽出
-            const lines = text.split('\n').filter(line => line.trim());
-            if (lines.length > 0 && !document.getElementById('name').value) {
-                document.getElementById('name').value = lines[0].trim();
+            // 3. 会社名抽出（優先度：中）
+            const companyKeywords = ['株式会社', '有限会社', '合同会社', '合資会社', '財団法人', '社団法人', 
+                                    '一般社団法人', '公益社団法人', 'Corporation', 'Inc', 'Ltd', 'Co'];
+            
+            for (const line of lines) {
+                for (const keyword of companyKeywords) {
+                    if (line.includes(keyword)) {
+                        result.company = line;
+                        console.log('✅ 会社名検出:', result.company);
+                        break;
+                    }
+                }
+                if (result.company) break;
             }
 
-            // メモ欄に全テキスト
+            // 4. 役職抽出（優先度：中）
+            const positionKeywords = ['社長', '代表取締役', '取締役', '部長', '課長', '係長', '主任', 
+                                     'マネージャー', 'ディレクター', 'リーダー', '担当', '責任者',
+                                     'CEO', 'COO', 'CTO', 'CFO', 'Manager', 'Director'];
+            
+            for (const line of lines) {
+                for (const keyword of positionKeywords) {
+                    if (line.includes(keyword) && line.length < 30) {
+                        result.position = line;
+                        console.log('✅ 役職検出:', result.position);
+                        break;
+                    }
+                }
+                if (result.position) break;
+            }
+
+            // 5. 住所抽出（優先度：低）
+            const addressKeywords = ['東京都', '大阪府', '京都府', '北海道', '県', '市', '区', '町', '村'];
+            
+            for (const line of lines) {
+                for (const keyword of addressKeywords) {
+                    if (line.includes(keyword) && line.length > 5) {
+                        result.address = line;
+                        console.log('✅ 住所検出:', result.address);
+                        break;
+                    }
+                }
+                if (result.address) break;
+            }
+
+            // 6. 名前抽出（優先度：高、但し最後に実行）
+            // 最初の行から名前を推測（会社名や役職でない場合）
+            if (lines.length > 0) {
+                const firstLine = lines[0];
+                // 2-10文字で、会社キーワードや役職キーワードを含まない
+                if (firstLine.length >= 2 && firstLine.length <= 10) {
+                    const isCompany = companyKeywords.some(kw => firstLine.includes(kw));
+                    const isPosition = positionKeywords.some(kw => firstLine.includes(kw));
+                    const hasEmail = /@/.test(firstLine);
+                    const hasPhone = /\d{3,}/.test(firstLine);
+                    
+                    if (!isCompany && !isPosition && !hasEmail && !hasPhone) {
+                        result.name = firstLine;
+                        console.log('✅ 名前検出（推測）:', result.name);
+                    }
+                }
+            }
+
+            // フォームに自動入力
+            if (result.name && !document.getElementById('name').value) {
+                document.getElementById('name').value = result.name;
+            }
+            if (result.company && !document.getElementById('company').value) {
+                document.getElementById('company').value = result.company;
+            }
+            if (result.position && !document.getElementById('position').value) {
+                document.getElementById('position').value = result.position;
+            }
+            if (result.email && !document.getElementById('email').value) {
+                document.getElementById('email').value = result.email;
+            }
+            if (result.phone && !document.getElementById('phone').value) {
+                document.getElementById('phone').value = result.phone;
+            }
+            if (result.address && !document.getElementById('address').value) {
+                document.getElementById('address').value = result.address;
+            }
+
+            // メモ欄にOCR全文を追加
             if (!document.getElementById('memo').value) {
                 document.getElementById('memo').value = text;
             }
+
+            console.log('=== 最終抽出結果 ===', result);
+            
+            return result;
         }
 
         // ========================================
@@ -1048,23 +1252,19 @@
                 let imageUrl = null;
                 let thumbnailUrl = null;
 
-                // 新しい画像がアップロードされている場合
                 if (uploadedImageBlob && uploadedThumbnailBlob) {
                     const timestamp = Date.now();
                     
-                    // 通常サイズの画像をアップロード
                     const imageFileName = `cards/${timestamp}_full.jpg`;
                     const imageRef = storage.ref(imageFileName);
                     await imageRef.put(uploadedImageBlob);
                     imageUrl = await imageRef.getDownloadURL();
                     
-                    // サムネイルをアップロード
                     const thumbnailFileName = `cards/${timestamp}_thumb.jpg`;
                     const thumbnailRef = storage.ref(thumbnailFileName);
                     await thumbnailRef.put(uploadedThumbnailBlob);
                     thumbnailUrl = await thumbnailRef.getDownloadURL();
                 } else if (currentEditId) {
-                    // 編集時に画像が変更されていない場合
                     const card = businessCards.find(c => c.id === currentEditId);
                     imageUrl = card ? card.imageUrl : null;
                     thumbnailUrl = card ? card.thumbnailUrl : null;
@@ -1085,10 +1285,8 @@
                 };
 
                 if (currentEditId) {
-                    // 更新
                     await db.collection('businessCards').doc(currentEditId).update(cardData);
                 } else {
-                    // 新規追加
                     cardData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
                     cardData.createdBy = currentUser.displayName || currentUser.email;
                     await db.collection('businessCards').add(cardData);
@@ -1135,7 +1333,6 @@
             const container = document.getElementById('cardsContainer');
             const pagination = document.getElementById('pagination');
             
-            // ページネーション情報を更新
             document.getElementById('displayedCards').textContent = filteredCards.length;
             
             if (filteredCards.length === 0) {
@@ -1153,7 +1350,6 @@
                 return;
             }
 
-            // 現在のページのカードを取得
             const startIndex = (currentPage - 1) * CARDS_PER_PAGE;
             const endIndex = Math.min(startIndex + CARDS_PER_PAGE, filteredCards.length);
             const pageCards = filteredCards.slice(startIndex, endIndex);
@@ -1176,7 +1372,6 @@
                 </div>
             `).join('');
 
-            // ページネーション表示
             if (totalPages > 1) {
                 pagination.classList.remove('hidden');
                 document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
@@ -1213,7 +1408,6 @@
                 try {
                     const card = businessCards.find(c => c.id === cardId);
                     
-                    // 画像を削除
                     if (card) {
                         if (card.imageUrl) {
                             const imageRef = storage.refFromURL(card.imageUrl);
