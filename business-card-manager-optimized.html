@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>名刺管理アプリ (Claude API版)</title>
+    <title>名刺管理アプリ (Claude API版 + 画像編集)</title>
     
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -191,6 +191,7 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
+            overflow-y: auto;
         }
 
         .modal.active {
@@ -201,7 +202,7 @@
             background: white;
             border-radius: 15px;
             padding: 30px;
-            max-width: 600px;
+            max-width: 900px;
             width: 100%;
             max-height: 90vh;
             overflow-y: auto;
@@ -216,6 +217,7 @@
             cursor: pointer;
             color: #999;
             transition: color 0.3s;
+            z-index: 10;
         }
 
         .close-btn:hover {
@@ -281,6 +283,116 @@
             margin-top: 10px;
             font-size: 14px;
             color: #999;
+        }
+
+        /* 画像編集エリア */
+        .image-editor {
+            display: none;
+            background: #f8f9ff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .image-editor.active {
+            display: block;
+        }
+
+        .editor-canvas-container {
+            position: relative;
+            width: 100%;
+            max-width: 100%;
+            margin: 20px 0;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        #editorCanvas {
+            display: block;
+            max-width: 100%;
+            height: auto;
+            cursor: crosshair;
+        }
+
+        .crop-overlay {
+            position: absolute;
+            border: 2px dashed #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            pointer-events: none;
+            display: none;
+        }
+
+        .editor-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .editor-controls button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.3s;
+        }
+
+        .editor-controls button:hover {
+            background: #764ba2;
+        }
+
+        .editor-controls button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .editor-slider-group {
+            margin: 15px 0;
+        }
+
+        .editor-slider-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .editor-slider-group input[type="range"] {
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #e0e0e0;
+            outline: none;
+        }
+
+        .editor-slider-group input[type="range"]::-webkit-slider-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+        }
+
+        .editor-slider-group input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .slider-value {
+            display: inline-block;
+            margin-left: 10px;
+            color: #667eea;
+            font-weight: bold;
         }
 
         .cards-grid {
@@ -621,7 +733,7 @@
     <!-- ログイン画面 -->
     <div id="loginContainer" class="login-container">
         <h2>🗂️ 名刺管理アプリ</h2>
-        <p>Claude API版 - AI搭載の超高精度OCR<br>Googleアカウントでログインしてください。</p>
+        <p>Claude API版 - AI搭載の超高精度OCR + 画像編集機能<br>Googleアカウントでログインしてください。</p>
         <button class="btn btn-primary" onclick="loginWithGoogle()">
             🔐 Googleでログイン
         </button>
@@ -646,7 +758,7 @@
                     <button onclick="saveApiKey()">保存</button>
                 </div>
                 <div id="apiKeySaved" class="api-key-saved">
-                    ✅ APIキーが保存されました！
+                    ✅ APIキーが保存されました!
                 </div>
             </div>
         </div>
@@ -703,7 +815,7 @@
             
             <div class="image-upload-area" onclick="document.getElementById('imageInput').click()">
                 <p>📷 クリックして名刺画像をアップロード</p>
-                <p style="font-size: 14px; color: #999;">Claude AIが自動で情報を抽出します</p>
+                <p style="font-size: 14px; color: #999;">アップロード後に画像を編集できます</p>
                 <input type="file" 
                        id="imageInput" 
                        accept="image/*" 
@@ -711,6 +823,42 @@
                        onchange="handleImageUpload(event)">
                 <img id="imagePreview" class="image-preview" style="display: none;">
                 <div id="imageInfo" class="image-info"></div>
+            </div>
+
+            <!-- 画像編集エリア -->
+            <div id="imageEditor" class="image-editor">
+                <h3 style="color: #667eea; margin-bottom: 15px;">🎨 画像編集</h3>
+                
+                <div class="editor-controls">
+                    <button onclick="rotateImage(-90)">↺ 左回転</button>
+                    <button onclick="rotateImage(90)">↻ 右回転</button>
+                    <button onclick="flipImage('horizontal')">↔️ 左右反転</button>
+                    <button onclick="flipImage('vertical')">↕️ 上下反転</button>
+                    <button onclick="startCrop()" id="cropBtn">✂️ トリミング</button>
+                    <button onclick="applyCrop()" id="applyCropBtn" style="display: none;">✅ トリミング適用</button>
+                    <button onclick="cancelCrop()" id="cancelCropBtn" style="display: none;">❌ キャンセル</button>
+                    <button onclick="autoCorrectPerspective()">📐 自動歪み補正</button>
+                    <button onclick="resetImage()">🔄 リセット</button>
+                </div>
+
+                <div class="editor-slider-group">
+                    <label>明るさ: <span class="slider-value" id="brightnessValue">100</span>%</label>
+                    <input type="range" id="brightnessSlider" min="50" max="150" value="100" oninput="adjustBrightness(this.value)">
+                </div>
+
+                <div class="editor-slider-group">
+                    <label>コントラスト: <span class="slider-value" id="contrastValue">100</span>%</label>
+                    <input type="range" id="contrastSlider" min="50" max="150" value="100" oninput="adjustContrast(this.value)">
+                </div>
+
+                <div class="editor-canvas-container">
+                    <canvas id="editorCanvas"></canvas>
+                    <div id="cropOverlay" class="crop-overlay"></div>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center;">
+                    <button class="btn btn-primary" onclick="applyEditsAndOCR()">✨ 編集を適用してOCR実行</button>
+                </div>
             </div>
 
             <div id="compressionProgress">
@@ -821,6 +969,22 @@
         const THUMBNAIL_WIDTH = 300;
         const THUMBNAIL_HEIGHT = 300;
 
+        // 画像編集関連
+        let originalImage = null;
+        let editedCanvas = null;
+        let editedCtx = null;
+        let currentRotation = 0;
+        let currentFlipH = false;
+        let currentFlipV = false;
+        let currentBrightness = 100;
+        let currentContrast = 100;
+        let isCropping = false;
+        let cropStart = null;
+        let cropEnd = null;
+
+        let uploadedImageBlob = null;
+        let uploadedThumbnailBlob = null;
+
         // 初期化関数
         function initializeFirebase() {
             try {
@@ -861,6 +1025,12 @@
                     filterAndDisplayCards(e.target.value);
                 }, 300);
             });
+
+            // キャンバスのイベントリスナー
+            const canvas = document.getElementById('editorCanvas');
+            canvas.addEventListener('mousedown', handleCanvasMouseDown);
+            canvas.addEventListener('mousemove', handleCanvasMouseMove);
+            canvas.addEventListener('mouseup', handleCanvasMouseUp);
         });
 
         // ========================================
@@ -1067,6 +1237,7 @@
             document.getElementById('ocrResult').style.display = 'none';
             document.getElementById('ocrProgress').style.display = 'none';
             document.getElementById('debugInfo').style.display = 'none';
+            document.getElementById('imageEditor').classList.remove('active');
             
             if (cardId) {
                 currentEditId = cardId;
@@ -1098,14 +1269,12 @@
             currentEditId = null;
             uploadedImageBlob = null;
             uploadedThumbnailBlob = null;
+            resetImageEditor();
         }
 
         // ========================================
-        // 画像アップロード & Claude API OCR
+        // 画像アップロード
         // ========================================
-
-        let uploadedImageBlob = null;
-        let uploadedThumbnailBlob = null;
 
         async function handleImageUpload(event) {
             const file = event.target.files[0];
@@ -1113,56 +1282,402 @@
 
             console.log('📸 画像アップロード開始:', file.name, formatFileSize(file.size));
 
-            const compressionProgress = document.getElementById('compressionProgress');
-            const compressionFill = document.getElementById('compressionFill');
             const imageInfo = document.getElementById('imageInfo');
             
             try {
                 const originalSize = formatFileSize(file.size);
                 imageInfo.textContent = `元のサイズ: ${originalSize}`;
-                compressionProgress.style.display = 'block';
-                compressionFill.style.width = '30%';
 
-                uploadedImageBlob = await compressImage(file, MAX_IMAGE_SIZE, MAX_WIDTH, MAX_HEIGHT);
-                compressionFill.style.width = '60%';
-
-                uploadedThumbnailBlob = await compressImage(file, THUMBNAIL_MAX_SIZE, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
-                compressionFill.style.width = '100%';
-
-                const compressedSize = formatFileSize(uploadedImageBlob.size);
-                const thumbnailSize = formatFileSize(uploadedThumbnailBlob.size);
-                
-                imageInfo.innerHTML = `
-                    元のサイズ: ${originalSize}<br>
-                    圧縮後: ${compressedSize} (画像) + ${thumbnailSize} (サムネイル)<br>
-                    <span style="color: #4CAF50;">✅ 圧縮完了</span>
-                `;
-
-                const dataUrl = await blobToDataURL(uploadedImageBlob);
-                const imagePreview = document.getElementById('imagePreview');
-                imagePreview.src = dataUrl;
-                imagePreview.style.display = 'block';
-
-                console.log('✅ 画像圧縮完了');
-
-                setTimeout(() => {
-                    compressionProgress.style.display = 'none';
-                }, 1000);
-
-                // Claude API OCR処理開始
-                console.log('🔍 Claude API OCR処理を開始します...');
-                await performClaudeOCR(dataUrl);
+                // 画像を読み込み
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = new Image();
+                    img.onload = function() {
+                        originalImage = img;
+                        initializeImageEditor(img);
+                        
+                        // プレビュー表示
+                        const imagePreview = document.getElementById('imagePreview');
+                        imagePreview.src = e.target.result;
+                        imagePreview.style.display = 'block';
+                        
+                        // 編集エリアを表示
+                        document.getElementById('imageEditor').classList.add('active');
+                        
+                        imageInfo.innerHTML = `
+                            元のサイズ: ${originalSize}<br>
+                            <span style="color: #4CAF50;">✅ 画像を読み込みました。編集してOCRを実行してください。</span>
+                        `;
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
             } catch (error) {
-                console.error('❌ 圧縮エラー:', error);
-                compressionProgress.style.display = 'none';
-                imageInfo.innerHTML = '<span style="color: #ff4757;">⚠️ 圧縮エラー</span>';
-                alert('画像の圧縮に失敗しました: ' + error.message);
+                console.error('❌ 画像読み込みエラー:', error);
+                imageInfo.innerHTML = '<span style="color: #ff4757;">⚠️ 画像読み込みエラー</span>';
+                alert('画像の読み込みに失敗しました: ' + error.message);
             }
         }
 
-        /**
-         * Claude API を使用した高精度OCR処理
-         */
+        // ========================================
+        // 画像編集機能
+        // ========================================
+
+        function initializeImageEditor(img) {
+            const canvas = document.getElementById('editorCanvas');
+            const container = canvas.parentElement;
+            
+            // コンテナの幅を取得
+            const containerWidth = container.offsetWidth - 40; // パディング分を引く
+            
+            // アスペクト比を維持しながらキャンバスサイズを設定
+            const aspectRatio = img.width / img.height;
+            let canvasWidth = Math.min(containerWidth, img.width);
+            let canvasHeight = canvasWidth / aspectRatio;
+            
+            // 高さが大きすぎる場合は調整
+            if (canvasHeight > 600) {
+                canvasHeight = 600;
+                canvasWidth = canvasHeight * aspectRatio;
+            }
+            
+            canvas.width = canvasWidth;
+            canvas.height = canvasHeight;
+            
+            editedCanvas = canvas;
+            editedCtx = canvas.getContext('2d');
+            
+            // 初期状態をリセット
+            currentRotation = 0;
+            currentFlipH = false;
+            currentFlipV = false;
+            currentBrightness = 100;
+            currentContrast = 100;
+            
+            document.getElementById('brightnessSlider').value = 100;
+            document.getElementById('contrastSlider').value = 100;
+            document.getElementById('brightnessValue').textContent = 100;
+            document.getElementById('contrastValue').textContent = 100;
+            
+            renderImage();
+        }
+
+        function renderImage() {
+            if (!originalImage || !editedCtx) return;
+            
+            const canvas = editedCanvas;
+            const ctx = editedCtx;
+            
+            // キャンバスをクリア
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            
+            // 中心を基準に変換
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            
+            // 回転
+            ctx.rotate((currentRotation * Math.PI) / 180);
+            
+            // 反転
+            ctx.scale(currentFlipH ? -1 : 1, currentFlipV ? -1 : 1);
+            
+            // 画像を描画
+            const drawWidth = canvas.width;
+            const drawHeight = canvas.height;
+            ctx.drawImage(originalImage, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+            
+            ctx.restore();
+            
+            // 明るさ・コントラスト調整
+            if (currentBrightness !== 100 || currentContrast !== 100) {
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                const brightness = currentBrightness / 100;
+                const contrast = currentContrast / 100;
+                const factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
+                
+                for (let i = 0; i < data.length; i += 4) {
+                    // コントラスト
+                    data[i] = factor * (data[i] - 128) + 128;
+                    data[i + 1] = factor * (data[i + 1] - 128) + 128;
+                    data[i + 2] = factor * (data[i + 2] - 128) + 128;
+                    
+                    // 明るさ
+                    data[i] = data[i] * brightness;
+                    data[i + 1] = data[i + 1] * brightness;
+                    data[i + 2] = data[i + 2] * brightness;
+                    
+                    // 範囲制限
+                    data[i] = Math.max(0, Math.min(255, data[i]));
+                    data[i + 1] = Math.max(0, Math.min(255, data[i + 1]));
+                    data[i + 2] = Math.max(0, Math.min(255, data[i + 2]));
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+            }
+        }
+
+        function rotateImage(degrees) {
+            currentRotation = (currentRotation + degrees) % 360;
+            renderImage();
+        }
+
+        function flipImage(direction) {
+            if (direction === 'horizontal') {
+                currentFlipH = !currentFlipH;
+            } else if (direction === 'vertical') {
+                currentFlipV = !currentFlipV;
+            }
+            renderImage();
+        }
+
+        function adjustBrightness(value) {
+            currentBrightness = parseInt(value);
+            document.getElementById('brightnessValue').textContent = value;
+            renderImage();
+        }
+
+        function adjustContrast(value) {
+            currentContrast = parseInt(value);
+            document.getElementById('contrastValue').textContent = value;
+            renderImage();
+        }
+
+        function resetImage() {
+            if (originalImage) {
+                initializeImageEditor(originalImage);
+            }
+        }
+
+        // トリミング機能
+        function startCrop() {
+            isCropping = true;
+            cropStart = null;
+            cropEnd = null;
+            document.getElementById('cropBtn').style.display = 'none';
+            document.getElementById('applyCropBtn').style.display = 'inline-block';
+            document.getElementById('cancelCropBtn').style.display = 'inline-block';
+            document.getElementById('cropOverlay').style.display = 'none';
+            editedCanvas.style.cursor = 'crosshair';
+        }
+
+        function handleCanvasMouseDown(e) {
+            if (!isCropping) return;
+            
+            const rect = editedCanvas.getBoundingClientRect();
+            cropStart = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function handleCanvasMouseMove(e) {
+            if (!isCropping || !cropStart) return;
+            
+            const rect = editedCanvas.getBoundingClientRect();
+            cropEnd = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            updateCropOverlay();
+        }
+
+        function handleCanvasMouseUp(e) {
+            if (!isCropping || !cropStart) return;
+            
+            const rect = editedCanvas.getBoundingClientRect();
+            cropEnd = {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+            
+            updateCropOverlay();
+        }
+
+        function updateCropOverlay() {
+            if (!cropStart || !cropEnd) return;
+            
+            const overlay = document.getElementById('cropOverlay');
+            const x = Math.min(cropStart.x, cropEnd.x);
+            const y = Math.min(cropStart.y, cropEnd.y);
+            const width = Math.abs(cropEnd.x - cropStart.x);
+            const height = Math.abs(cropEnd.y - cropStart.y);
+            
+            overlay.style.left = x + 'px';
+            overlay.style.top = y + 'px';
+            overlay.style.width = width + 'px';
+            overlay.style.height = height + 'px';
+            overlay.style.display = 'block';
+        }
+
+        function applyCrop() {
+            if (!cropStart || !cropEnd) {
+                alert('トリミング範囲を選択してください');
+                return;
+            }
+            
+            const x = Math.min(cropStart.x, cropEnd.x);
+            const y = Math.min(cropStart.y, cropEnd.y);
+            const width = Math.abs(cropEnd.x - cropStart.x);
+            const height = Math.abs(cropEnd.y - cropStart.y);
+            
+            if (width < 10 || height < 10) {
+                alert('トリミング範囲が小さすぎます');
+                return;
+            }
+            
+            // 現在のキャンバスから切り取り
+            const imageData = editedCtx.getImageData(x, y, width, height);
+            
+            // 新しいキャンバスを作成
+            const newCanvas = document.createElement('canvas');
+            newCanvas.width = width;
+            newCanvas.height = height;
+            const newCtx = newCanvas.getContext('2d');
+            newCtx.putImageData(imageData, 0, 0);
+            
+            // 新しい画像として設定
+            const img = new Image();
+            img.onload = function() {
+                originalImage = img;
+                cancelCrop();
+                initializeImageEditor(img);
+            };
+            img.src = newCanvas.toDataURL();
+        }
+
+        function cancelCrop() {
+            isCropping = false;
+            cropStart = null;
+            cropEnd = null;
+            document.getElementById('cropBtn').style.display = 'inline-block';
+            document.getElementById('applyCropBtn').style.display = 'none';
+            document.getElementById('cancelCropBtn').style.display = 'none';
+            document.getElementById('cropOverlay').style.display = 'none';
+            editedCanvas.style.cursor = 'default';
+        }
+
+        // 自動歪み補正(簡易版)
+        function autoCorrectPerspective() {
+            // 簡易的な補正として、コントラストを上げてシャープ化
+            currentContrast = 120;
+            document.getElementById('contrastSlider').value = 120;
+            document.getElementById('contrastValue').textContent = 120;
+            renderImage();
+            
+            showSyncStatus('自動補正を適用しました', 'success');
+        }
+
+        function resetImageEditor() {
+            originalImage = null;
+            editedCanvas = null;
+            editedCtx = null;
+            currentRotation = 0;
+            currentFlipH = false;
+            currentFlipV = false;
+            currentBrightness = 100;
+            currentContrast = 100;
+            isCropping = false;
+            cropStart = null;
+            cropEnd = null;
+        }
+
+        // 編集を適用してOCR実行
+        async function applyEditsAndOCR() {
+            if (!editedCanvas) {
+                alert('画像が読み込まれていません');
+                return;
+            }
+            
+            try {
+                showSyncStatus('画像を処理中...', 'syncing');
+                
+                // 編集済み画像をBlobに変換
+                const blob = await new Promise(resolve => {
+                    editedCanvas.toBlob(resolve, 'image/jpeg', 0.95);
+                });
+                
+                // 圧縮処理
+                const compressionProgress = document.getElementById('compressionProgress');
+                const compressionFill = document.getElementById('compressionFill');
+                compressionProgress.style.display = 'block';
+                compressionFill.style.width = '30%';
+                
+                uploadedImageBlob = await compressImageBlob(blob, MAX_IMAGE_SIZE, MAX_WIDTH, MAX_HEIGHT);
+                compressionFill.style.width = '60%';
+                
+                uploadedThumbnailBlob = await compressImageBlob(blob, THUMBNAIL_MAX_SIZE, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+                compressionFill.style.width = '100%';
+                
+                setTimeout(() => {
+                    compressionProgress.style.display = 'none';
+                }, 1000);
+                
+                // OCR実行
+                const dataUrl = await blobToDataURL(uploadedImageBlob);
+                await performClaudeOCR(dataUrl);
+                
+            } catch (error) {
+                console.error('画像処理エラー:', error);
+                showSyncStatus('画像処理エラー', 'error');
+                alert('画像の処理に失敗しました: ' + error.message);
+            }
+        }
+
+        async function compressImageBlob(blob, maxSize, maxWidth, maxHeight) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    let quality = 0.9;
+                    
+                    const tryCompress = () => {
+                        canvas.toBlob((b) => {
+                            if (b.size <= maxSize || quality <= 0.1) {
+                                resolve(b);
+                            } else {
+                                quality -= 0.1;
+                                tryCompress();
+                            }
+                        }, 'image/jpeg', quality);
+                    };
+                    
+                    tryCompress();
+                };
+                
+                img.onerror = reject;
+                img.src = URL.createObjectURL(blob);
+            });
+        }
+
+        // ========================================
+        // Claude API OCR
+        // ========================================
+
         async function performClaudeOCR(imageSrc) {
             if (!claudeApiKey) {
                 alert('Claude APIキーが設定されていません。画面上部でAPIキーを設定してください。');
@@ -1186,13 +1701,11 @@
                 ocrStatus.textContent = '🔍 Claude AIで画像を解析中...';
                 progressFill.style.width = '20%';
 
-                // Base64データを抽出
                 const base64Data = imageSrc.split(',')[1];
                 
                 debugInfo.textContent = '📤 画像データを送信中...';
                 progressFill.style.width = '40%';
 
-                // Claude APIリクエスト
                 const response = await fetch('https://api.anthropic.com/v1/messages', {
                     method: 'POST',
                     headers: {
@@ -1220,7 +1733,7 @@
 
 必須フォーマット:
 {
-  "name": "氏名（フルネーム）",
+  "name": "氏名(フルネーム)",
   "company": "会社名",
   "position": "役職",
   "email": "メールアドレス",
@@ -1229,9 +1742,9 @@
 }
 
 重要な注意点:
-- JSONのみを返してください（説明文は不要）
+- JSONのみを返してください(説明文は不要)
 - 氏名は姓と名の間にスペースを入れてください
-- 電話番号はハイフン区切りで返してください（例: 03-1234-5678）
+- 電話番号はハイフン区切りで返してください(例: 03-1234-5678)
 - 見つからない項目は空文字列""を設定してください`
                                 }
                             ]
@@ -1240,7 +1753,7 @@
                 });
 
                 progressFill.style.width = '70%';
-                debugInfo.textContent = '🔄 AI応答を処理中...';
+                debugInfo.textContent = '📄 AI応答を処理中...';
 
                 if (!response.ok) {
                     const errorData = await response.json();
@@ -1253,7 +1766,6 @@
                 console.log('=== Claude API Response ===');
                 console.log(data);
 
-                // レスポンスからテキストを抽出
                 let extractedText = '';
                 if (data.content && Array.isArray(data.content)) {
                     extractedText = data.content
@@ -1264,10 +1776,8 @@
 
                 console.log('Extracted Text:', extractedText);
 
-                // JSONをパース
                 let parsedData = null;
                 try {
-                    // ```json ``` などのマークダウンコードブロックを削除
                     const cleanedText = extractedText
                         .replace(/```json\n?/g, '')
                         .replace(/```\n?/g, '')
@@ -1281,13 +1791,11 @@
                 }
 
                 progressFill.style.width = '100%';
-                debugInfo.textContent = '✅ AI解析完了！';
+                debugInfo.textContent = '✅ AI解析完了!';
 
-                // OCR結果を表示
                 ocrResult.style.display = 'block';
                 ocrText.textContent = JSON.stringify(parsedData, null, 2);
 
-                // フィールドに自動入力
                 const result = {
                     name: parsedData.name || '',
                     company: parsedData.company || '',
@@ -1297,7 +1805,6 @@
                     address: parsedData.address || ''
                 };
 
-                // 抽出状態を表示
                 const statuses = [
                     { label: '氏名', found: result.name !== '' },
                     { label: '会社名', found: result.company !== '' },
@@ -1316,7 +1823,6 @@
                 const foundCount = statuses.filter(s => s.found).length;
                 ocrStatus.textContent = `✅ AI解析完了! (${foundCount}/6項目を検出)`;
 
-                // フォームに自動入力
                 if (result.name && !document.getElementById('name').value) {
                     document.getElementById('name').value = result.name;
                 }
